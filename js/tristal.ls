@@ -1,18 +1,16 @@
-width = 600
-height = 400
+width = 1000
+height = 600
 filldist = Math.sqrt(width*width + height*height)/2
+mindist = Math.min(width, height)
 renderer = new PIXI.autoDetectRenderer width, height, antialias: on
 stage = new PIXI.Container!
-stage.pivot
-  ..x = width/2
-  ..y = height/2
 stage.position
   ..x = width/2
   ..y = height/2
 mass = new PIXI.Graphics!
-mass.position
-  ..x = width/2
-  ..y = height/2
+#mass.position
+#  ..x = width/2
+#  ..y = height/2
 bullseye = new PIXI.Graphics!
 bullseye.position = mass.position
 stage.addChild bullseye
@@ -24,9 +22,12 @@ square = [-1,-1,-1,1,1,1,1,-1]
 
 # For easier manipulation
 window.Tristal =
-  rad: 20
+  rad: 10
   precision: 5
   mass: mass
+  # List of falling objects
+  # (is hash since we expect to be removing random elements)
+  falling: {}
   # Draw a 'unit' square, plus some extras
   unitTrist: (graphics, cx, cy) ->
     rad = @rad
@@ -37,7 +38,7 @@ window.Tristal =
     centers = graphics.centers ||= []
     centers.push cx, cy
     graphics.beginFill 0x70CC0B, 1
-    graphics.drawCircle cx, cy, rad/pre
+    #graphics.drawCircle cx, cy, rad/pre
     graphics.beginFill 0xCC700B, 1
     gedges = graphics.edges ||= []
     newedges =
@@ -46,7 +47,7 @@ window.Tristal =
       cx, cy + 2*rad
       cx, cy - 2*rad
     for ,i in newedges by 2
-      graphics.drawCircle newedges[i], newedges[i+1], rad/pre
+      #graphics.drawCircle newedges[i], newedges[i+1], rad/pre
       gedges.push newedges[i], newedges[i+1]
   # We may want to remove edges that are also centers
   simplifyEdges: (graphics) ->
@@ -76,31 +77,40 @@ window.Tristal =
     rad = @rad
     bullseye.clear!
     alt = true
-    for dw from filldist to 3*rad by -2*rad
+    for dw from Math.ceil(filldist/rad)*rad to 3*rad by -2*rad
       bullseye.beginFill (if !=alt then 0x222222 else 0x333333), 1
+      if mindist/2 - rad <= dw < mindist/2 + rad
+        bullseye.beginFill 0x552222, 1
       bullseye.drawPolygon -dw, -dw, -dw, dw, dw, dw, dw, -dw
       bullseye.endFill!
     mass
-  falling: []
   newFalling: ->
     obj = new PIXI.Graphics!
     rad = @rad
     stage.addChild obj
     obj.lineStyle 1, 0xAACCBB, 1
-    obj.position
-      ..x = width/2
-      ..y = -rad
-    obj.velocity = new PIXI.Point 0, 2
-    obj.beginFill 0x700BCC, 1
+    m = 2 * Math.round(Math.random!) - 1
+    if Math.random! < 0.5
+      obj.position
+        ..x = 0
+        ..y = m * (height/2 + rad)
+      obj.velocity = new PIXI.Point 0, -m*2
+    else
+      obj.position
+        ..y = 0
+        ..x = m * (width/2 + rad)
+      obj.velocity = new PIXI.Point -m*2, 0
+
 
     # Display box
+    obj.beginFill 0x700BCC, 1
     @unitTrist obj, 0, 0
     obj
   dropFalling: ->
     mass = @mass
     rad = @rad
     pre = @precision
-    for obj,i in @falling
+    for k,obj of @falling
       pos = obj.position
       vel = obj.velocity
       # Find out if the obj has hit an edge of the center mass
@@ -117,36 +127,71 @@ window.Tristal =
         mass.worldTransform.apply(tempPoint1, tempPoint1)
         # But we ultimately want to talk in the falling obj's terms:
         obj.updateTransform!
-        obj.worldTransform.applyInverse(tempPoint1, tempPoint2)
+        obj.worldTransform.applyInverse(tempPoint1, tempPoint1)
         for ,ci in centers by 2
-          if Math.abs(tempPoint2.x - centers[ci]) < rad/pre \
-              and Math.abs(tempPoint2.y - centers[ci+1]) < rad/pre
+          if Math.abs(tempPoint1.x - centers[ci]) < rad/pre \
+              and Math.abs(tempPoint1.y - centers[ci+1]) < rad/pre
             stuck = true
             stuck-at = ei
             break
         break if stuck
       if stuck
-        if Math.abs(edges[ei]) >= width/2 - rad or Math.abs(edges[ei+1]) >= height/2 - rad
-          throw "You lost!! Ha!"
         stage.removeChild obj
         @unitTrist mass, edges[ei], edges[ei+1]
+        if Math.abs(edges[ei]) >= width/2 - 2*rad or Math.abs(edges[ei+1]) >= height/2 - 2*rad
+          throw "You lost!! Ha!"
         @simplifyEdges mass
         #mass.addChild obj
-        @falling[i] = @newFalling!
+        delete @falling[k]
       else
-        pos.x = (pos.x + vel.x + rad) % (filldist*2+2*rad) - rad
-        pos.y = (pos.y + vel.y + rad) % (filldist*2+2*rad) - rad
-  drawFalling: ->
-    for obj in @falling
-      shape = obj.myshape
-      obj.drawShape shape
+        stage.worldTransform.apply(pos, tempPoint1)
+        x-err = width % rad
+        if tempPoint1.x < -width - rad
+          pos.x = vel.x + width/2 + x-err
+        if tempPoint1.x > width + rad
+          pos.x = vel.x - width/2 - x-err
+        else
+          pos.x += vel.x
+        y-err = height % rad
+        if tempPoint1.y < -height - rad
+          pos.y = vel.y + height/2 + y-err
+        if tempPoint1.y > height + rad
+          pos.y = vel.y - height/2 - y-err
+        else
+          pos.y += vel.y
+        #stage.worldTransform.applyInverse(tempPoint1, pos)
+  shiftFalling: (dir)->
+    rad = @rad
+    for ,obj of @falling
+      vel = obj.velocity
+      pos = obj.position
+      if vel.x < 0
+        pos.y += 2*rad*dir
+      if vel.x > 0
+        pos.y -= 2*rad*dir
+      if vel.y < 0
+        pos.x -= 2*rad*dir
+      if vel.y > 0
+        pos.x += 2*rad*dir
+
+document.onkeydown = (e) !->
+  e = e || window.event;
+  switch e.which || e.keyCode
+  case 37, 65 # left
+    Tristal.shiftFalling -1
+  #case 38, 87 # up
+  case 39, 68 # right
+    Tristal.shiftFalling 1
+  #case 40, 83 # down
+  e.preventDefault
 
 Tristal.initBullseye!
 Tristal.initMass!
-Tristal.falling.push Tristal.newFalling!
+fall-id = 0
+Tristal.falling[fall-id++] = Tristal.newFalling!
 animate = (timestamp) ->
   stage.rotation += 0.001
-  #mass.rotation += 0.01
+  #mass.rotation -= 0.01
   #Tristal.rad = 60 + 20 * Math.sin timestamp/4000*6.28
   Tristal.dropFalling!
   renderer.render stage
@@ -157,6 +202,7 @@ animate = (timestamp) ->
 #PIXI.loader
 #  .load onAssetsLoaded
 animate!
+setInterval (!-> Tristal.falling[fall-id++] = Tristal.newFalling!), 1000
 
 #document.onload = ->
 document.body.appendChild renderer.view
