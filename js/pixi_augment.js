@@ -12,4 +12,17 @@
     }
     return newPoints;
   };
+  PIXI.Matrix.prototype.applyInverseFlat = function(points){
+    var newPoints, id, i$, len$, i, x, y;
+    newPoints = [];
+    id = 1 / (this.a * this.d + this.c * -this.b);
+    for (i$ = 0, len$ = points.length; i$ < len$; i$ += 2) {
+      i = i$;
+      x = points[i];
+      y = points[i + 1];
+      newPoints[i] = this.d * id * x + -this.c * id * y + (this.ty * this.c - this.tx * this.d) * id;
+      newPoints[i + 1] = this.a * id * y + -this.b * id * x + (-this.ty * this.a + this.tx * this.b) * id;
+    }
+    return newPoints;
+  };
 }).call(this);
