@@ -26,7 +26,7 @@
     mass: mass,
     falling: {},
     unitTrist: function(graphics, cx, cy){
-      var rad, pre, centers, gedges, newedges, i$, len$, i, results$ = [];
+      var rad, pre, centers;
       rad = this.rad;
       pre = this.precision;
       mass.beginFill(0x700BCC, 1);
@@ -35,36 +35,37 @@
       centers.push(cx, cy);
       graphics.beginFill(0x70CC0B, 1);
       graphics.beginFill(0xCC700B, 1);
-      gedges = graphics.edges || (graphics.edges = []);
-      newedges = [cx + 2 * rad, cy, cx - 2 * rad, cy, cx, cy + 2 * rad, cx, cy - 2 * rad];
-      for (i$ = 0, len$ = newedges.length; i$ < len$; i$ += 2) {
-        i = i$;
-        results$.push(gedges.push(newedges[i], newedges[i + 1]));
-      }
-      return results$;
+      (graphics.rightEdges || (graphics.rightEdges = [])).push(cx + 2 * rad, cy);
+      (graphics.leftEdges || (graphics.leftEdges = [])).push(cx - 2 * rad, cy);
+      (graphics.upEdges || (graphics.upEdges = [])).push(cx, cy + 2 * rad);
+      return (graphics.downEdges || (graphics.downEdges = [])).push(cx, cy - 2 * rad);
     },
     simplifyEdges: function(graphics){
-      var centers, edges, newedges, rad, pre, i$, len$, i, isCenter, j$, len1$, j;
+      var centers, i$, ref$, len$, dir, edges, newedges, rad, pre, j$, len1$, i, isCenter, k$, len2$, j, results$ = [];
       centers = graphics.centers;
-      edges = graphics.edges;
-      newedges = [];
-      rad = this.rad;
-      pre = this.precision;
-      for (i$ = 0, len$ = edges.length; i$ < len$; i$ += 2) {
-        i = i$;
-        isCenter = false;
-        for (j$ = 0, len1$ = centers.length; j$ < len1$; j$ += 2) {
-          j = j$;
-          if (edges[i] === centers[j] && edges[i + 1] === centers[j + 1]) {
-            isCenter = true;
-            break;
+      for (i$ = 0, len$ = (ref$ = ["right", "left", "up", "down"]).length; i$ < len$; ++i$) {
+        dir = ref$[i$];
+        edges = graphics[dir + "Edges"];
+        newedges = [];
+        rad = this.rad;
+        pre = this.precision;
+        for (j$ = 0, len1$ = edges.length; j$ < len1$; j$ += 2) {
+          i = j$;
+          isCenter = false;
+          for (k$ = 0, len2$ = centers.length; k$ < len2$; k$ += 2) {
+            j = k$;
+            if (edges[i] === centers[j] && edges[i + 1] === centers[j + 1]) {
+              isCenter = true;
+              break;
+            }
+          }
+          if (!isCenter) {
+            newedges.push(edges[i], edges[i + 1]);
           }
         }
-        if (!isCenter) {
-          newedges.push(edges[i], edges[i + 1]);
-        }
+        results$.push(graphics[dir + "Edges"] = newedges);
       }
-      return graphics.edges = newedges;
+      return results$;
     },
     initMass: function(){
       var mass, rad;
@@ -99,11 +100,13 @@
       obj.lineStyle(1, 0xAACCBB, 1);
       m = 2 * Math.round(Math.random()) - 1;
       if (Math.random() < 0.5) {
+        obj.direction = m < 0 ? "down" : "up";
         x$ = obj.position;
         x$.x = 0;
         x$.y = m * (height / 2 + rad);
         obj.velocity = new PIXI.Point(0, -m * 2);
       } else {
+        obj.direction = m < 0 ? "left" : "right";
         y$ = obj.position;
         y$.y = 0;
         y$.x = m * (width / 2 + rad);
@@ -124,7 +127,7 @@
         vel = obj.velocity;
         stuck = false;
         stuckAt = 0;
-        edges = mass.edges;
+        edges = mass[obj.direction + "Edges"];
         centers = obj.centers;
         for (i$ = 0, len$ = edges.length; i$ < len$; i$ += 2) {
           ei = i$;

@@ -38,33 +38,28 @@ window.Tristal =
     centers = graphics.centers ||= []
     centers.push cx, cy
     graphics.beginFill 0x70CC0B, 1
-    #graphics.drawCircle cx, cy, rad/pre
     graphics.beginFill 0xCC700B, 1
-    gedges = graphics.edges ||= []
-    newedges =
-      cx + 2*rad, cy
-      cx - 2*rad, cy
-      cx, cy + 2*rad
-      cx, cy - 2*rad
-    for ,i in newedges by 2
-      #graphics.drawCircle newedges[i], newedges[i+1], rad/pre
-      gedges.push newedges[i], newedges[i+1]
+    (graphics.right-edges ||= []).push cx + 2*rad, cy
+    (graphics.left-edges  ||= []).push cx - 2*rad, cy
+    (graphics.up-edges    ||= []).push cx, cy + 2*rad
+    (graphics.down-edges  ||= []).push cx, cy - 2*rad
   # We may want to remove edges that are also centers
   simplifyEdges: (graphics) ->
     centers = graphics.centers
-    edges = graphics.edges
-    newedges = []
-    rad = @rad
-    pre = @precision
-    for ,i in edges by 2
-      is-center = false
-      for ,j in centers by 2
-        if edges[i] == centers[j] and edges[i+1] == centers[j+1]
-          is-center = true
-          break
-      unless is-center
-        newedges.push edges[i], edges[i+1]
-    graphics.edges = newedges
+    for dir in ["right","left","up","down"]
+      edges = graphics[dir+"Edges"]
+      newedges = []
+      rad = @rad
+      pre = @precision
+      for ,i in edges by 2
+        is-center = false
+        for ,j in centers by 2
+          if edges[i] == centers[j] and edges[i+1] == centers[j+1]
+            is-center = true
+            break
+        unless is-center
+          newedges.push edges[i], edges[i+1]
+      graphics[dir+"Edges"] = newedges
   # Initialize mass and bullseye
   initMass: ->
     mass = @mass
@@ -91,11 +86,13 @@ window.Tristal =
     obj.lineStyle 1, 0xAACCBB, 1
     m = 2 * Math.round(Math.random!) - 1
     if Math.random! < 0.5
+      obj.direction = if m < 0 then "down" else "up"
       obj.position
         ..x = 0
         ..y = m * (height/2 + rad)
       obj.velocity = new PIXI.Point 0, -m*2
     else
+      obj.direction = if m < 0 then "left" else "right"
       obj.position
         ..y = 0
         ..x = m * (width/2 + rad)
@@ -117,7 +114,7 @@ window.Tristal =
       # if so, stick it to the man - er, the mass
       stuck = false
       stuck-at = 0
-      edges = mass.edges
+      edges = mass.[obj.direction + "Edges"]
       centers = obj.centers
       for ,ei in edges by 2
         tempPoint1.x = edges[ei]
