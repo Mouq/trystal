@@ -4,17 +4,16 @@ filldist = Math.sqrt(width*width + height*height)/2
 mindist = Math.min(width, height)
 renderer = new PIXI.autoDetectRenderer width, height, antialias: on
 stage = new PIXI.Container!
-stage.position
+tristalbox = new PIXI.Graphics!
+stage.addChild tristalbox
+tristalbox.position
   ..x = width/2
   ..y = height/2
 mass = new PIXI.Graphics!
-#mass.position
-#  ..x = width/2
-#  ..y = height/2
 bullseye = new PIXI.Graphics!
 bullseye.position = mass.position
-stage.addChild bullseye
-stage.addChild mass
+tristalbox.addChild bullseye
+tristalbox.addChild mass
 
 tempPoint1 = new PIXI.Point 0, 0
 tempPoint2 = new PIXI.Point 0, 0
@@ -39,8 +38,8 @@ window.Tristal =
     centers.push cx, cy
     graphics.beginFill 0x70CC0B, 1
     graphics.beginFill 0xCC700B, 1
-    (graphics.right-edges ||= []).push cx + 2*rad, cy
-    (graphics.left-edges  ||= []).push cx - 2*rad, cy
+    (graphics.left-edges  ||= []).push cx + 2*rad, cy
+    (graphics.right-edges ||= []).push cx - 2*rad, cy
     (graphics.up-edges    ||= []).push cx, cy + 2*rad
     (graphics.down-edges  ||= []).push cx, cy - 2*rad
   # We may want to remove edges that are also centers
@@ -81,23 +80,24 @@ window.Tristal =
     mass
   newFalling: ->
     obj = new PIXI.Graphics!
+    mass = new PIXI.Graphics!
     rad = @rad
-    stage.addChild obj
+    tristalbox.addChild obj
     obj.lineStyle 1, 0xAACCBB, 1
     m = 2 * Math.round(Math.random!) - 1
     if Math.random! < 0.5
       obj.direction = if m < 0 then "down" else "up"
       obj.position
         ..x = 0
-        ..y = m * (height/2 + rad)
+        ..y = m * mindist/2
       obj.velocity = new PIXI.Point 0, -m*2
     else
-      obj.direction = if m < 0 then "left" else "right"
+      obj.direction = if m < 0 then "right" else "left"
       obj.position
         ..y = 0
-        ..x = m * (width/2 + rad)
+        ..x = m * mindist/2
       obj.velocity = new PIXI.Point -m*2, 0
-
+    obj.position.{x,y} += mass.position
 
     # Display box
     obj.beginFill 0x700BCC, 1
@@ -110,11 +110,12 @@ window.Tristal =
     for k,obj of @falling
       pos = obj.position
       vel = obj.velocity
+      dir = obj.direction
       # Find out if the obj has hit an edge of the center mass
       # if so, stick it to the man - er, the mass
       stuck = false
       stuck-at = 0
-      edges = mass.[obj.direction + "Edges"]
+      edges = mass[dir + "Edges"]
       centers = obj.centers
       for ,ei in edges by 2
         tempPoint1.x = edges[ei]
@@ -133,30 +134,64 @@ window.Tristal =
             break
         break if stuck
       if stuck
-        stage.removeChild obj
+        tristalbox.removeChild obj
         @unitTrist mass, edges[ei], edges[ei+1]
-        if Math.abs(edges[ei]) >= width/2 - 2*rad or Math.abs(edges[ei+1]) >= height/2 - 2*rad
+        if Math.max(Math.abs(edges[ei]),Math.abs(edges[ei+1])) >= mindist/2 - 2*rad
           throw "You lost!! Ha!"
         @simplifyEdges mass
         #mass.addChild obj
         delete @falling[k]
       else
-        stage.worldTransform.apply(pos, tempPoint1)
-        x-err = width % rad
-        if tempPoint1.x < -width - rad
-          pos.x = vel.x + width/2 + x-err
-        if tempPoint1.x > width + rad
-          pos.x = vel.x - width/2 - x-err
-        else
-          pos.x += vel.x
-        y-err = height % rad
-        if tempPoint1.y < -height - rad
-          pos.y = vel.y + height/2 + y-err
-        if tempPoint1.y > height + rad
-          pos.y = vel.y - height/2 - y-err
-        else
-          pos.y += vel.y
-        #stage.worldTransform.applyInverse(tempPoint1, pos)
+        tristalbox.updateTransform!
+        tristalbox.worldTransform.apply(pos, tempPoint1)
+        changed = false
+        x-dist = width/2 + 2*rad
+        y-dist = height/2 + 2*rad
+        theta = tristalbox.rotation
+        sc = Math.sin(theta)
+        cc = Math.cos(theta)
+        tc = sc/cc
+        # Pretend 0 <= theta < pi/4, and adjust before and after
+        # otherwise the logic is too involved…
+        rot_num = Math.floor(Math.abs(theta)/Math.PI*2) % 4
+        if theta < 0 then rot_num = 4 - rot_num
+        # fdir is the direction relative to the frame, toward the corners
+        findex = {left: 0, up: 1, right: 2, down: 3}[dir]
+        fdir = [ \nw, \ne, \se, \sw ][(findex + rot_num) % 4]
+        # We also need to switch around the coordinate axes to act like theta < pi/4
+        if rot_num % 2 is not 0
+          tempPoint2.x = pos.x
+          tempPoint2.y = pos.y
+          pos.x = tempPoint2.y
+          pos.y = tempPoint2.x
+        if fdir is \nw and (tempPoint1.y < - 2*rad or tempPoint1.x < - 2*rad)
+          console.log 1, k
+          pos.x = Math.min \
+            y-dist/sc - pos.y/tc,
+            x-dist/cc + pos.y*tc,
+        else if fdir is \se and (tempPoint1.y > height + 2*rad or tempPoint1.x > width + 2*rad)
+          console.log 2, k
+          pos.x = -Math.min \
+            y-dist/sc + pos.y/tc,
+            x-dist/cc - pos.y*tc,
+        else if fdir is \ne and (tempPoint1.y < - 2*rad or tempPoint1.x > width + 2*rad)
+          console.log 3, k
+          pos.y = Math.min \
+            y-dist/cc - pos.x*tc,
+            x-dist/sc + pos.x/tc,
+        else if fdir is \sw and (tempPoint1.y > height + 2*rad or tempPoint1.x < - 2*rad)
+          console.log 3, k
+          pos.y = -Math.min \
+            y-dist/cc + pos.x*tc,
+            x-dist/sc - pos.x/tc,
+        # Undo any transformations
+        if rot_num % 2 is not 0
+          tempPoint2.x = pos.x
+          tempPoint2.y = pos.y
+          pos.x = tempPoint2.y
+          pos.y = tempPoint2.x
+        pos.x += vel.x
+        pos.y += vel.y
   shiftFalling: (dir)->
     rad = @rad
     for ,obj of @falling
@@ -186,9 +221,10 @@ Tristal.initBullseye!
 Tristal.initMass!
 fall-id = 0
 Tristal.falling[fall-id++] = Tristal.newFalling!
+#tristalbox.rotation += Math.PI/16*17
 animate = (timestamp) ->
-  stage.rotation += 0.001
-  #mass.rotation -= 0.01
+  tristalbox.rotation += 0.001
+  #mass.rotation += 0.01
   #Tristal.rad = 60 + 20 * Math.sin timestamp/4000*6.28
   Tristal.dropFalling!
   renderer.render stage
@@ -199,7 +235,7 @@ animate = (timestamp) ->
 #PIXI.loader
 #  .load onAssetsLoaded
 animate!
-setInterval (!-> Tristal.falling[fall-id++] = Tristal.newFalling!), 1000
+setInterval (!-> Tristal.falling[fall-id++] = Tristal.newFalling!), 1500
 
 #document.onload = ->
 document.body.appendChild renderer.view

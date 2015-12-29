@@ -1,0 +1,6 @@
+* Step doesn't wrap
+* Step can pass through mass
+* Still some bugs with wrapping + turning, things disappearing for a bit, etc.
+* Only squares yet
+* Doesn't kill completed metasquares
+* 
