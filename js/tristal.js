@@ -44,24 +44,24 @@
       centers.push(cx, cy);
       graphics.beginFill(0x70CC0B, 1);
       graphics.beginFill(0xCC700B, 1);
-      (graphics.leftEdges || (graphics.leftEdges = [])).push(cx + 2 * rad, cy);
-      (graphics.rightEdges || (graphics.rightEdges = [])).push(cx - 2 * rad, cy);
-      (graphics.upEdges || (graphics.upEdges = [])).push(cx, cy + 2 * rad);
-      return (graphics.downEdges || (graphics.downEdges = [])).push(cx, cy - 2 * rad);
+      (graphics.edges0 || (graphics.edges0 = [])).push(cx + 2 * rad, cy);
+      (graphics.edges1 || (graphics.edges1 = [])).push(cx, cy + 2 * rad);
+      (graphics.edges2 || (graphics.edges2 = [])).push(cx - 2 * rad, cy);
+      return (graphics.edges3 || (graphics.edges3 = [])).push(cx, cy - 2 * rad);
     },
     simplifyEdges: function(graphics){
-      var centers, i$, ref$, len$, dir, edges, newedges, rad, pre, j$, len1$, i, isCenter, k$, len2$, j, results$ = [];
+      var centers, i$, ref$, v, edges, newedges, rad, pre, j$, len$, i, isCenter, k$, len1$, j, results$ = [];
       centers = graphics.centers;
-      for (i$ = 0, len$ = (ref$ = ["right", "left", "up", "down"]).length; i$ < len$; ++i$) {
-        dir = ref$[i$];
-        edges = graphics[dir + "Edges"];
+      for (i$ in ref$ = DIRENUM) {
+        v = ref$[i$];
+        edges = graphics["edges" + v];
         newedges = [];
         rad = this.rad;
         pre = this.precision;
-        for (j$ = 0, len1$ = edges.length; j$ < len1$; j$ += 2) {
+        for (j$ = 0, len$ = edges.length; j$ < len$; j$ += 2) {
           i = j$;
           isCenter = false;
-          for (k$ = 0, len2$ = centers.length; k$ < len2$; k$ += 2) {
+          for (k$ = 0, len1$ = centers.length; k$ < len1$; k$ += 2) {
             j = k$;
             if (edges[i] === centers[j] && edges[i + 1] === centers[j + 1]) {
               isCenter = true;
@@ -72,7 +72,7 @@
             newedges.push(edges[i], edges[i + 1]);
           }
         }
-        results$.push(graphics[dir + "Edges"] = newedges);
+        results$.push(graphics["edges" + v] = newedges);
       }
       return results$;
     },
@@ -128,7 +128,7 @@
       return obj;
     },
     dropFalling: function(){
-      var mass, rad, pre, k, ref$, obj, pos, vel, dir, stuck, stuckAt, edges, centers, i$, len$, ei, j$, len1$, ci, ref1$, ref2$, xDist, yDist, theta, sr, cr, tr, rot_num, findex, fdir, tx, ty, results$ = [];
+      var mass, rad, pre, k, ref$, obj, pos, vel, dir, stuck, stuckAt, theta, rot_num, corrected_dir, edges, centers, i$, len$, ei, j$, len1$, ci, ref1$, ref2$, xDist, yDist, sr, cr, tr, findex, fdir, tx, ty, results$ = [];
       mass = this.mass;
       rad = this.rad;
       pre = this.precision;
@@ -139,7 +139,16 @@
         dir = obj.direction;
         stuck = false;
         stuckAt = 0;
-        edges = mass[dir + "Edges"];
+        theta = mass.rotation;
+        rot_num = Math.floor(Math.abs(theta) / Math.PI * 2) % 4;
+        if (theta < 0) {
+          rot_num = 4 - rot_num;
+        }
+        corrected_dir = (DIRENUM[dir] - rot_num) % 4;
+        if (corrected_dir < 0) {
+          corrected_dir = 4 + corrected_dir;
+        }
+        edges = mass["edges" + corrected_dir];
         centers = obj.centers;
         for (i$ = 0, len$ = edges.length; i$ < len$; i$ += 2) {
           ei = i$;
@@ -251,6 +260,15 @@
         }
       }
       return results$;
+    },
+    rotate: function(spin){
+      var i$, ref$, obj, results$ = [];
+      mass.rotation += spin * Math.PI / 2;
+      for (i$ in ref$ = this.falling) {
+        obj = ref$[i$];
+        results$.push(obj.rotation += spin * Math.PI / 2);
+      }
+      return results$;
     }
   };
   document.onkeydown = function(e){
@@ -260,9 +278,17 @@
     case 65:
       Tristal.shiftFalling(-1);
       break;
+    case 38:
+    case 87:
+      Tristal.rotate(1);
+      break;
     case 39:
     case 68:
       Tristal.shiftFalling(1);
+      break;
+    case 40:
+    case 83:
+      Tristal.rotate(-1);
     }
     e.preventDefault;
   };

@@ -40,15 +40,15 @@ window.Tristal =
     centers.push cx, cy
     graphics.beginFill 0x70CC0B, 1
     graphics.beginFill 0xCC700B, 1
-    (graphics.left-edges  ||= []).push cx + 2*rad, cy
-    (graphics.right-edges ||= []).push cx - 2*rad, cy
-    (graphics.up-edges    ||= []).push cx, cy + 2*rad
-    (graphics.down-edges  ||= []).push cx, cy - 2*rad
+    (graphics.edges0 ||= []).push cx + 2*rad, cy
+    (graphics.edges1 ||= []).push cx, cy + 2*rad
+    (graphics.edges2 ||= []).push cx - 2*rad, cy
+    (graphics.edges3 ||= []).push cx, cy - 2*rad
   # We may want to remove edges that are also centers
   simplifyEdges: (graphics) ->
     centers = graphics.centers
-    for dir in ["right","left","up","down"]
-      edges = graphics[dir+"Edges"]
+    for ,v of DIRENUM
+      edges = graphics["edges"+v]
       newedges = []
       rad = @rad
       pre = @precision
@@ -60,7 +60,7 @@ window.Tristal =
             break
         unless is-center
           newedges.push edges[i], edges[i+1]
-      graphics[dir+"Edges"] = newedges
+      graphics["edges"+v] = newedges
   # Initialize mass and bullseye
   initMass: ->
     mass = @mass
@@ -117,7 +117,13 @@ window.Tristal =
       # if so, stick it to the man - er, the mass
       stuck = false
       stuck-at = 0
-      edges = mass[dir + "Edges"]
+      # The mass may be rotated. Make sure we're getting the right edge
+      theta = mass.rotation
+      rot_num = Math.floor(Math.abs(theta)/Math.PI*2) % 4
+      if theta < 0 then rot_num = 4 - rot_num
+      corrected_dir = (DIRENUM[dir]-rot_num)%4
+      if corrected_dir < 0 then corrected_dir = 4 + corrected_dir
+      edges = mass["edges"+corrected_dir]
       centers = obj.centers
       for ,ei in edges by 2
         tempPoint1.x = edges[ei]
@@ -216,16 +222,22 @@ window.Tristal =
       case \down
         tx += 2*rad*spin
         pos.x = if Math.abs(tx) >= mindist/2 then -pos.x else tx
+  rotate: (spin)->
+    mass.rotation += spin*Math.PI/2
+    for ,obj of @falling
+      obj.rotation += spin*Math.PI/2
 
 document.onkeydown = (e) !->
   e = e || window.event;
   switch e.which || e.keyCode
   case 37, 65 # left
     Tristal.shiftFalling -1
-  #case 38, 87 # up
+  case 38, 87 # up
+    Tristal.rotate 1
   case 39, 68 # right
     Tristal.shiftFalling 1
-  #case 40, 83 # down
+  case 40, 83 # down
+    Tristal.rotate -1
   e.preventDefault
 
 Tristal.initBullseye!
