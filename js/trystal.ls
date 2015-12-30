@@ -1,31 +1,24 @@
-width = 1000
-height = 600
-filldist = Math.sqrt(width*width + height*height)/2
-mindist = Math.min(width, height)
-renderer = new PIXI.autoDetectRenderer width, height, antialias: on
-stage = new PIXI.Container!
-tristalbox = new PIXI.Graphics!
-stage.addChild tristalbox
-tristalbox.position
-  ..x = width/2
-  ..y = height/2
-mass = new PIXI.Graphics!
-bullseye = new PIXI.Graphics!
-bullseye.position = mass.position
-tristalbox.addChild bullseye
-tristalbox.addChild mass
-
 tempPoint1 = new PIXI.Point 0, 0
 tempPoint2 = new PIXI.Point 0, 0
-square = [-1,-1,-1,1,1,1,1,-1]
 
 const DIRENUM = {left: 0, up: 1, right: 2, down: 3}
 const ORDINALS = [ \nw, \ne, \se, \sw ]
-# For easier manipulation
-window.Tristal =
+# extendes PIXI.Graphics ?
+export class Trystal
+  # Create a PIXI container, initialize important items
+  (@width, @height) ->
+    @filldist = Math.sqrt(width*width + height*height)/2
+    @mindist = Math.min(width, height)
+    @container = container = new PIXI.Graphics!
+    container.position
+      ..x = width/2
+      ..y = height/2
+    container.addChild @bullseye = new PIXI.Graphics!
+    @initBullseye!
+    container.addChild @mass = new PIXI.Graphics!
+    @initMass!
   rad: 10
-  precision: 5
-  mass: mass
+  precision: 2
   # List of falling objects
   # (is hash since we expect to be removing random elements)
   falling: {}
@@ -33,7 +26,7 @@ window.Tristal =
   unitTrist: (graphics, cx, cy) ->
     rad = @rad
     pre = @precision
-    mass.beginFill 0x700BCC, 1
+    graphics.beginFill 0x700BCC, 1
     graphics.drawRect cx - rad, cy - rad, 2*rad, 2*rad
     # Metadata
     centers = graphics.centers ||= []
@@ -71,42 +64,43 @@ window.Tristal =
     mass
   initBullseye: ->
     rad = @rad
+    bullseye = @bullseye
     bullseye.clear!
     alt = true
-    for dw from Math.ceil(filldist/rad)*rad to 3*rad by -2*rad
+    for dw from Math.ceil(@filldist/rad)*rad to 3*rad by -2*rad
       bullseye.beginFill (if !=alt then 0x222222 else 0x333333), 1
-      if mindist/2 - rad <= dw < mindist/2 + rad
+      if @mindist/2 - rad <= dw < @mindist/2 + rad
         bullseye.beginFill 0x552222, 1
       bullseye.drawPolygon -dw, -dw, -dw, dw, dw, dw, dw, -dw
       bullseye.endFill!
-    mass
+    bullseye
+  fall-id = 0
   newFalling: ->
     obj = new PIXI.Graphics!
-    mass = new PIXI.Graphics!
     rad = @rad
-    tristalbox.addChild obj
+    @container.addChild obj
     obj.lineStyle 1, 0xAACCBB, 1
     m = 2 * Math.round(Math.random!) - 1
     if Math.random! < 0.5
       obj.direction = if m < 0 then "down" else "up"
       obj.position
         ..x = 0
-        ..y = m * mindist/2
+        ..y = m * @mindist/2
       obj.velocity = new PIXI.Point 0, -m*2
     else
       obj.direction = if m < 0 then "right" else "left"
       obj.position
         ..y = 0
-        ..x = m * mindist/2
+        ..x = m * @mindist/2
       obj.velocity = new PIXI.Point -m*2, 0
-    obj.position.{x,y} += mass.position
 
     # Display box
     obj.beginFill 0x700BCC, 1
     @unitTrist obj, 0, 0
-    obj
+    @falling[fall-id++] = obj
   dropFalling: ->
     mass = @mass
+    container = @container
     rad = @rad
     pre = @precision
     for k,obj of @falling
@@ -142,22 +136,24 @@ window.Tristal =
             break
         break if stuck
       if stuck
-        tristalbox.removeChild obj
+        container.removeChild obj
         @unitTrist mass, edges[ei], edges[ei+1]
-        if Math.max(Math.abs(edges[ei]),Math.abs(edges[ei+1])) >= mindist/2 - 2*rad
+        if Math.max(Math.abs(edges[ei]),Math.abs(edges[ei+1])) >= @mindist/2 - 2*rad
           throw "You lost!! Ha!"
         @simplifyEdges mass
         #mass.addChild obj
         delete @falling[k]
       else
-        tristalbox.updateTransform!
-        tristalbox.worldTransform.apply(pos, tempPoint1)
+        container.updateTransform!
+        container.worldTransform.apply(pos, tempPoint1)
+        width = @width
+        height = @height
         x-dist = width/2 + 2*rad
         y-dist = height/2 + 2*rad
-        theta = tristalbox.rotation
+        theta = container.rotation
         # XXX: Naughty ;) _sr/_cr is not part of the public API
-        sr = tristalbox._sr #Math.sin(theta)
-        cr = tristalbox._cr #Math.cos(theta)
+        sr = container._sr #Math.sin(theta)
+        cr = container._cr #Math.cos(theta)
         tr = sr/cr
         # Pretend 0 <= theta < pi/4, and adjust before and after
         # otherwise the logic is too involved…
@@ -212,53 +208,17 @@ window.Tristal =
       switch dir
       case \left
         ty += 2*rad*spin
-        pos.y = if Math.abs(ty) >= mindist/2 then -pos.y else ty
+        pos.y = if Math.abs(ty) >= @mindist/2 then -pos.y else ty
       case \right
         ty -= 2*rad*spin
-        pos.y = if Math.abs(ty) >= mindist/2 then -pos.y else ty
+        pos.y = if Math.abs(ty) >= @mindist/2 then -pos.y else ty
       case \up
         tx -= 2*rad*spin
-        pos.x = if Math.abs(tx) >= mindist/2 then -pos.x else tx
+        pos.x = if Math.abs(tx) >= @mindist/2 then -pos.x else tx
       case \down
         tx += 2*rad*spin
-        pos.x = if Math.abs(tx) >= mindist/2 then -pos.x else tx
+        pos.x = if Math.abs(tx) >= @mindist/2 then -pos.x else tx
   rotate: (spin)->
-    mass.rotation += spin*Math.PI/2
+    @mass.rotation += spin*Math.PI/2
     for ,obj of @falling
       obj.rotation += spin*Math.PI/2
-
-document.onkeydown = (e) !->
-  e = e || window.event;
-  switch e.which || e.keyCode
-  case 37, 65 # left
-    Tristal.shiftFalling -1
-  case 38, 87 # up
-    Tristal.rotate 1
-  case 39, 68 # right
-    Tristal.shiftFalling 1
-  case 40, 83 # down
-    Tristal.rotate -1
-  e.preventDefault
-
-Tristal.initBullseye!
-Tristal.initMass!
-fall-id = 0
-Tristal.falling[fall-id++] = Tristal.newFalling!
-#tristalbox.rotation += Math.PI/16*17
-animate = (timestamp) ->
-  tristalbox.rotation = (tristalbox.rotation + 0.001) % (Math.PI/4)
-  #mass.rotation += 0.01
-  #Tristal.rad = 60 + 20 * Math.sin timestamp/4000*6.28
-  Tristal.dropFalling!
-  renderer.render stage
-  requestAnimationFrame animate
-
-#onAssetsLoaded = ->
-#  animate!
-#PIXI.loader
-#  .load onAssetsLoaded
-animate!
-setInterval (!-> Tristal.falling[fall-id++] = Tristal.newFalling!), 1000
-
-#document.onload = ->
-document.body.appendChild renderer.view
