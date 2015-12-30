@@ -19,6 +19,8 @@ tempPoint1 = new PIXI.Point 0, 0
 tempPoint2 = new PIXI.Point 0, 0
 square = [-1,-1,-1,1,1,1,1,-1]
 
+const DIRENUM = {left: 0, up: 1, right: 2, down: 3}
+const ORDINALS = [ \nw, \ne, \se, \sw ]
 # For easier manipulation
 window.Tristal =
   rad: 10
@@ -144,67 +146,76 @@ window.Tristal =
       else
         tristalbox.updateTransform!
         tristalbox.worldTransform.apply(pos, tempPoint1)
-        changed = false
         x-dist = width/2 + 2*rad
         y-dist = height/2 + 2*rad
         theta = tristalbox.rotation
-        sc = Math.sin(theta)
-        cc = Math.cos(theta)
-        tc = sc/cc
+        # XXX: Naughty ;) _sr/_cr is not part of the public API
+        sr = tristalbox._sr #Math.sin(theta)
+        cr = tristalbox._cr #Math.cos(theta)
+        tr = sr/cr
         # Pretend 0 <= theta < pi/4, and adjust before and after
         # otherwise the logic is too involved…
         rot_num = Math.floor(Math.abs(theta)/Math.PI*2) % 4
         if theta < 0 then rot_num = 4 - rot_num
         # fdir is the direction relative to the frame, toward the corners
-        findex = {left: 0, up: 1, right: 2, down: 3}[dir]
-        fdir = [ \nw, \ne, \se, \sw ][(findex + rot_num) % 4]
-        # We also need to switch around the coordinate axes to act like theta < pi/4
+        findex = DIRENUM[dir]
+        fdir = ORDINALS[(findex + rot_num) % 4]
+        # We also need to switrh around the coordinate axes to act like theta < pi/4
         if rot_num % 2 is not 0
-          tempPoint2.x = pos.x
-          tempPoint2.y = pos.y
-          pos.x = tempPoint2.y
-          pos.y = tempPoint2.x
-        if fdir is \nw and (tempPoint1.y < - 2*rad or tempPoint1.x < - 2*rad)
-          console.log 1, k
-          pos.x = Math.min \
-            y-dist/sc - pos.y/tc,
-            x-dist/cc + pos.y*tc,
-        else if fdir is \se and (tempPoint1.y > height + 2*rad or tempPoint1.x > width + 2*rad)
-          console.log 2, k
-          pos.x = -Math.min \
-            y-dist/sc + pos.y/tc,
-            x-dist/cc - pos.y*tc,
-        else if fdir is \ne and (tempPoint1.y < - 2*rad or tempPoint1.x > width + 2*rad)
-          console.log 3, k
-          pos.y = Math.min \
-            y-dist/cc - pos.x*tc,
-            x-dist/sc + pos.x/tc,
-        else if fdir is \sw and (tempPoint1.y > height + 2*rad or tempPoint1.x < - 2*rad)
-          console.log 3, k
-          pos.y = -Math.min \
-            y-dist/cc + pos.x*tc,
-            x-dist/sc - pos.x/tc,
+          tx = pos.x
+          ty = pos.y
+          pos.x = ty
+          pos.y = tx
+        # TODO: Abstract/simplify
+        switch fdir
+        case \nw
+          if tempPoint1.y < - 2*rad or tempPoint1.x < - 2*rad
+            pos.x = Math.min \
+              y-dist/sr - pos.y/tr,
+              x-dist/cr + pos.y*tr,
+        case \se
+          if tempPoint1.y > height + 2*rad or tempPoint1.x > width + 2*rad
+            pos.x = -Math.min \
+              y-dist/sr + pos.y/tr,
+              x-dist/cr - pos.y*tr,
+        case \ne
+          if tempPoint1.y < - 2*rad or tempPoint1.x > width + 2*rad
+            pos.y = Math.min \
+              y-dist/cr - pos.x*tr,
+              x-dist/sr + pos.x/tr,
+        case \sw
+          if tempPoint1.y > height + 2*rad or tempPoint1.x < - 2*rad
+            pos.y = -Math.min \
+              y-dist/cr + pos.x*tr,
+              x-dist/sr - pos.x/tr,
         # Undo any transformations
         if rot_num % 2 is not 0
-          tempPoint2.x = pos.x
-          tempPoint2.y = pos.y
-          pos.x = tempPoint2.y
-          pos.y = tempPoint2.x
+          tx = pos.x
+          ty = pos.y
+          pos.x = ty
+          pos.y = tx
         pos.x += vel.x
         pos.y += vel.y
-  shiftFalling: (dir)->
+  shiftFalling: (spin)->
     rad = @rad
     for ,obj of @falling
-      vel = obj.velocity
+      dir = obj.direction
       pos = obj.position
-      if vel.x < 0
-        pos.y += 2*rad*dir
-      if vel.x > 0
-        pos.y -= 2*rad*dir
-      if vel.y < 0
-        pos.x -= 2*rad*dir
-      if vel.y > 0
-        pos.x += 2*rad*dir
+      tx = pos.x
+      ty = pos.y
+      switch dir
+      case \left
+        ty += 2*rad*spin
+        pos.y = if Math.abs(ty) >= mindist/2 then -pos.y else ty
+      case \right
+        ty -= 2*rad*spin
+        pos.y = if Math.abs(ty) >= mindist/2 then -pos.y else ty
+      case \up
+        tx -= 2*rad*spin
+        pos.x = if Math.abs(tx) >= mindist/2 then -pos.x else tx
+      case \down
+        tx += 2*rad*spin
+        pos.x = if Math.abs(tx) >= mindist/2 then -pos.x else tx
 
 document.onkeydown = (e) !->
   e = e || window.event;
@@ -223,7 +234,7 @@ fall-id = 0
 Tristal.falling[fall-id++] = Tristal.newFalling!
 #tristalbox.rotation += Math.PI/16*17
 animate = (timestamp) ->
-  tristalbox.rotation += 0.001
+  tristalbox.rotation = (tristalbox.rotation + 0.001) % (Math.PI/4)
   #mass.rotation += 0.01
   #Tristal.rad = 60 + 20 * Math.sin timestamp/4000*6.28
   Tristal.dropFalling!
@@ -235,7 +246,7 @@ animate = (timestamp) ->
 #PIXI.loader
 #  .load onAssetsLoaded
 animate!
-setInterval (!-> Tristal.falling[fall-id++] = Tristal.newFalling!), 1500
+setInterval (!-> Tristal.falling[fall-id++] = Tristal.newFalling!), 1000
 
 #document.onload = ->
 document.body.appendChild renderer.view
